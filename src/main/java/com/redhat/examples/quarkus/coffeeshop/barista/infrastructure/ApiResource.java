@@ -1,4 +1,4 @@
-package com.redhat.examples.quarkus;
+package com.redhat.examples.quarkus.coffeeshop.barista.infrastructure;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
