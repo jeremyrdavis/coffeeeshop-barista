@@ -29,12 +29,12 @@ public class ExternalKafkaTestCase {
 
     static final String TOPIC_NAME = "orders";
 
-    KafkaProducer<String, String> kafkaProducer;
-    KafkaConsumer<String, String> kafkaConsumer;
-    AdminClient kafkaAdminClient;
+    static KafkaProducer<String, String> kafkaProducer;
+    static KafkaConsumer<String, String> kafkaConsumer;
+    static AdminClient kafkaAdminClient;
 
     @BeforeEach
-    public void setUp() {
+    public static void setUp() {
 
         setUpAdminClient();
         setUpProducer();
@@ -44,11 +44,6 @@ public class ExternalKafkaTestCase {
 
     @AfterEach
     public void tearDown() {
-    }
-
-    @Test
-    public void testReceivingMessages() {
-
     }
 
     @Test
@@ -86,14 +81,14 @@ public class ExternalKafkaTestCase {
         kafkaProducer.close();
     }
 
-    void setUpAdminClient() {
+    static void setUpAdminClient() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("bootstrap.servers", "localhost:9092");
         kafkaAdminClient = AdminClient.create(config);
     }
 
-    void setUpTopics() {
+    static void setUpTopics() {
         //create Topics
 
         List<NewTopic> topics = new ArrayList<>();
@@ -103,7 +98,7 @@ public class ExternalKafkaTestCase {
         kafkaAdminClient.close();
     }
 
-    void setUpProducer(){
+    static void setUpProducer(){
         //create Producer config
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -119,7 +114,7 @@ public class ExternalKafkaTestCase {
         );
     }
 
-    void setUpConsumer() {
+    static void setUpConsumer() {
 
         //create Consumer config
         Properties props = new Properties();

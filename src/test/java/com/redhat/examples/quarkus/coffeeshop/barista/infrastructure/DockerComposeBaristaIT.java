@@ -15,101 +15,73 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import javax.json.bind.Jsonb;
 import java.io.File;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 @Testcontainers
 public class DockerComposeBaristaIT {
 
-    static final String TOPIC_NAME = "orders";
-
-    DockerComposeContainer dockerComposeContainer;
-
+    final String TOPIC_NAME = "orders";
+    static DockerComposeContainer dockerComposeContainer;
     KafkaProducer<String, String> kafkaProducer;
     KafkaConsumer<String, String> kafkaConsumer;
+    AdminClient kafkaAdminClient;
 
-    @BeforeEach
-    public void setUp() {
+    @BeforeAll
+    public static void setUpAll() {
         dockerComposeContainer = new DockerComposeContainer(
                 new File("src/test/resources/docker-compose.yaml"))
                 .withExposedService("kafka", 9092)
                 .withExposedService("zookeeper", 2181);
-
         dockerComposeContainer.start();
+    }
 
-        //create Producer config
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put("input.topic.name", TOPIC_NAME);
-        props.put("input.topic.partitions", "4");
-        props.put("input.topic.replication.factor", "1");
+    @BeforeEach
+    public void setUp() {
 
-        //initialize the Producer
-        kafkaProducer = new KafkaProducer(
-                props,
-                new StringSerializer(),
-                new StringSerializer()
-        );
-
-        //create Topics
-        Map<String, Object> config = new HashMap<>();
-        config.put("bootstrap.servers", "localhost:9092");
-        AdminClient client = AdminClient.create(config);
-
-        List<NewTopic> topics = new ArrayList<>();
-        topics.add(new NewTopic(TOPIC_NAME, 4, (short) 1));
-
-        client.createTopics(topics);
-        client.close();
-
-        //create Consumer config
-        Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "testgroup" + new Random().nextInt());
-        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        consumerProps.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-
-        //initialize the Consumer
-        kafkaConsumer = new KafkaConsumer(
-                consumerProps,
-                new StringDeserializer(),
-                new StringDeserializer()
-        );
-
-        kafkaConsumer.subscribe(Arrays.asList(TOPIC_NAME));
+        setUpAdminClient();
+        setUpProducer();
+        setUpTopics();
+        setUpConsumer();
     }
 
     @AfterEach
     public void tearDown() {
+    }
+
+    @AfterAll
+    public static void tearDownAll() {
         dockerComposeContainer.stop();
     }
 
     @Test
-    public void testSomething() throws InterruptedException, ExecutionException {
+    public void testConsumingMessages() {
 
-/*
-        BeverageOrder beverageOrder = new BeverageOrder("Jeremy", Beverage.BLACK_COFFEE);
-        RecordMetadata recordMetadata = kafkaProducer.send(new ProducerRecord<>(TOPIC_NAME, "order", beverageOrder.toString())).get();
-*/
+        ConsumerRecords<String, String> records = kafkaConsumer.poll(Duration.ofMillis(10000));
+        assertFalse(records.isEmpty());
+
+        assertEquals(5, records.count());
+        records.forEach(stringStringConsumerRecord -> {
+            assertEquals("testContainers", stringStringConsumerRecord.key());
+            assertEquals("AreAwesome", stringStringConsumerRecord.value());
+        });
+    }
+
+    @Test
+    public void testSendingMessages() {
 
         long numberOfEvents = 5;
         for (int i = 0; i < numberOfEvents; i++) {
@@ -128,39 +100,58 @@ public class DockerComposeBaristaIT {
         }
 
         kafkaProducer.close();
-
-/*
-        Awaitility.await()
-                .dontCatchUncaughtExceptions()
-                .atLeast(6, TimeUnit.SECONDS)
-                .pollInterval(10, TimeUnit.MILLISECONDS)
-                .until(future::isDone);
-*/
-//        Thread.sleep(6000);
-
-        ConsumerRecords<String, String> records;
-
-        final int giveUp = 10;
-        int noRecordsCount = 0;
-
-        while(true){
-
-            records = kafkaConsumer.poll(10000);
-
-            if (records.count()==0) {
-                System.out.println("No records found");
-                noRecordsCount++;
-                if (noRecordsCount > giveUp) break;
-                else continue;
-            }
-        }
-
-        assertFalse(records.isEmpty());
-
-        assertEquals(records.count(), 1);
-        records.forEach(stringStringConsumerRecord -> {
-            assertEquals(stringStringConsumerRecord.key(), "testContainers");
-            assertEquals(stringStringConsumerRecord.value(), "are awesome");
-        });
     }
+
+    void setUpAdminClient() {
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("bootstrap.servers", "localhost:9092");
+        kafkaAdminClient = AdminClient.create(config);
+    }
+
+    void setUpTopics() {
+        //create Topics
+
+        List<NewTopic> topics = new ArrayList<>();
+        topics.add(new NewTopic(TOPIC_NAME, 4, (short) 1));
+
+        kafkaAdminClient.createTopics(topics);
+        kafkaAdminClient.close();
+    }
+
+    void setUpProducer(){
+        //create Producer config
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put("input.topic.name", TOPIC_NAME);
+
+        //initialize the Producer
+        kafkaProducer = new KafkaProducer(
+                props,
+                new StringSerializer(),
+                new StringSerializer()
+        );
+    }
+
+    void setUpConsumer() {
+
+        //create Consumer config
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "testgroup" + new Random().nextInt());
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        //initialize the Consumer
+        kafkaConsumer = new KafkaConsumer(props);
+        //subscribe
+        kafkaConsumer.subscribe(singletonList(TOPIC_NAME));
+    }
+
 }
