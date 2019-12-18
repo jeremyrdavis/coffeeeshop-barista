@@ -1,8 +1,13 @@
 package com.redhat.examples.quarkus.coffeeshop.barista.infrastructure;
 
+import static io.restassured.RestAssured.given;
+import static java.util.Collections.singletonList;
+
+import com.redhat.examples.quarkus.Barista;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.Beverage;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.BeverageOrder;
 import io.quarkus.test.junit.QuarkusTest;
+import javafx.scene.media.MediaPlayer;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -12,6 +17,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.After;
@@ -21,23 +27,34 @@ import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import javax.inject.Inject;
+import javax.json.bind.Jsonb;
+import javax.json.bind.JsonbBuilder;
 import java.io.File;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 import static java.util.Collections.singletonList;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.jupiter.api.Assertions.*;
 
-@QuarkusTest
-@Testcontainers
+@QuarkusTest @Testcontainers
 public class BaristaIT {
 
+    Jsonb jsonb = JsonbBuilder.create();
+
+    //Kafka stuff
     final String TOPIC_NAME = "orders";
+
     static DockerComposeContainer dockerComposeContainer;
+
     KafkaProducer<String, String> kafkaProducer;
+
     KafkaConsumer<String, String> kafkaConsumer;
+
     AdminClient kafkaAdminClient;
+
 
     @BeforeAll
     public static void setUpAll() {
@@ -119,22 +136,34 @@ public class BaristaIT {
     }
 
     @Test
-    public void testOrderInFromKafka() throws ExecutionException, InterruptedException {
+    public void testBlackCoffeeOrderInFromKafka() throws ExecutionException, InterruptedException {
+
+        given()
+                .when().get("/api")
+                .then()
+                .statusCode(200)
+                .body(is("hello"));
 
         BeverageOrder beverageOrder = new BeverageOrder(UUID.randomUUID().toString(), "Jeremy", Beverage.BLACK_COFFEE);
         kafkaProducer.send(new ProducerRecord<>(TOPIC_NAME, beverageOrder.orderId, beverageOrder.toString())).get();
 
+        //Give the Barista time to make the drink
         Thread.sleep(5010);
 
-        ConsumerRecords<String, String> records = kafkaConsumer.poll(Duration.ofMillis(10000));
-        assertFalse(records.isEmpty());
-        for (ConsumerRecord<String, String> record : records) {
+        List<PartitionInfo> partitionInfos = kafkaConsumer.partitionsFor(TOPIC_NAME);
+
+        ConsumerRecords<String, String> allRecords = kafkaConsumer.poll(Duration.ofMillis(10000));
+        assertFalse(allRecords.isEmpty());
+        for (ConsumerRecord<String, String> record : allRecords) {
             System.out.printf("offset = %d, key = %s, value = %s\n",
                     record.offset(),
                     record.key(),
                     record.value());
             assertEquals(beverageOrder.orderId, record.key());
             assertEquals(beverageOrder.toString(), record.value());
+            System.out.println(record.value());
+            BeverageOrder result = jsonb.fromJson(record.value(), BeverageOrder.class);
+            assertEquals(MediaPlayer.Status.READY, result.status);
         }
     }
 }

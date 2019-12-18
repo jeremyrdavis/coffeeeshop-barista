@@ -1,5 +1,6 @@
-package com.redhat.examples.quarkus;
+package com.redhat.examples.quarkus.coffeeshop.barista.domain;
 
+import com.redhat.examples.quarkus.Barista;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.Beverage;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.BeverageOrder;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.Status;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import javax.inject.Inject;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,15 +27,17 @@ public class BaristaTest {
     public void testBlackCoffeeOrder() throws ExecutionException, InterruptedException {
 
         BeverageOrder beverageOrder = new BeverageOrder(UUID.randomUUID().toString(),"Jeremy", Beverage.BLACK_COFFEE);
-        CompletableFuture<BeverageOrder> result = barista.orderIn(beverageOrder);
-        assertEquals(result.get().status, Status.READY);
+        barista.orderIn(beverageOrder).thenAccept(result -> {
+            assertEquals(result, Status.READY);
+        });
     }
 
     @Test
     public void testLatteOrder() throws ExecutionException, InterruptedException {
 
         BeverageOrder beverageOrder = new BeverageOrder(UUID.randomUUID().toString(),"Jeremy", Beverage.LATTE);
-        CompletableFuture<BeverageOrder> result = barista.orderIn(beverageOrder);
-        assertEquals(result.get().status, Status.READY);
+        barista.orderIn(beverageOrder).thenAccept(result -> {
+            assertEquals(result, Status.READY);
+        });
     }
 }

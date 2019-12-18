@@ -1,4 +1,4 @@
-package com.redhat.examples.quarkus;
+package com.redhat.examples.quarkus.coffeeshop.barista.infrastructure;
 
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;

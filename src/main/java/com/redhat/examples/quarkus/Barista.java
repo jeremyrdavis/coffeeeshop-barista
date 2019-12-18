@@ -7,13 +7,14 @@ import org.jboss.logging.Logger;
 import javax.enterprise.context.ApplicationScoped;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 @ApplicationScoped
 public class Barista {
 
     Logger logger = Logger.getLogger(Barista.class);
 
-    public CompletableFuture<BeverageOrder> orderIn(BeverageOrder beverageOrder) {
+    public CompletionStage<BeverageOrder> orderIn(BeverageOrder beverageOrder) {
 
         logger.debug("orderIn: " + beverageOrder.toString());
 
