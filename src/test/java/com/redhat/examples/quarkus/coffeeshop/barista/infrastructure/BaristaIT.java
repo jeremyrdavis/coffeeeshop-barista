@@ -6,9 +6,11 @@ import static java.util.Collections.singletonList;
 import com.redhat.examples.quarkus.Barista;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.Beverage;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.BeverageOrder;
+import com.redhat.examples.quarkus.coffeeshop.barista.domain.Status;
 import io.quarkus.test.junit.QuarkusTest;
 import javafx.scene.media.MediaPlayer;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -20,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.jupiter.api.*;
@@ -45,7 +48,9 @@ public class BaristaIT {
     Jsonb jsonb = JsonbBuilder.create();
 
     //Kafka stuff
-    final String TOPIC_NAME = "orders";
+    final String INCOMING_TOPIC_NAME = KafkaResource.KafkaTopics.INCOMING;
+
+    final String OUTGOING_TOPIC_NAME = KafkaResource.KafkaTopics.OUTGOING;
 
     static DockerComposeContainer dockerComposeContainer;
 
@@ -94,7 +99,8 @@ public class BaristaIT {
         //create Topics
 
         List<NewTopic> topics = new ArrayList<>();
-        topics.add(new NewTopic(TOPIC_NAME, 4, (short) 1));
+        topics.add(new NewTopic(INCOMING_TOPIC_NAME, 4, (short) 1));
+        topics.add(new NewTopic(OUTGOING_TOPIC_NAME, 4, (short) 1));
 
         kafkaAdminClient.createTopics(topics);
         kafkaAdminClient.close();
@@ -106,7 +112,7 @@ public class BaristaIT {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put("input.topic.name", TOPIC_NAME);
+        props.put("input.topic.name", INCOMING_TOPIC_NAME);
 
         //initialize the Producer
         kafkaProducer = new KafkaProducer(
@@ -131,39 +137,36 @@ public class BaristaIT {
 
         //initialize the Consumer
         kafkaConsumer = new KafkaConsumer(props);
+
         //subscribe
-        kafkaConsumer.subscribe(singletonList(TOPIC_NAME));
+        kafkaConsumer.subscribe(Arrays.asList(OUTGOING_TOPIC_NAME));
     }
 
     @Test
     public void testBlackCoffeeOrderInFromKafka() throws ExecutionException, InterruptedException {
 
-        given()
-                .when().get("/api")
-                .then()
-                .statusCode(200)
-                .body(is("hello"));
-
         BeverageOrder beverageOrder = new BeverageOrder(UUID.randomUUID().toString(), "Jeremy", Beverage.BLACK_COFFEE);
-        kafkaProducer.send(new ProducerRecord<>(TOPIC_NAME, beverageOrder.orderId, beverageOrder.toString())).get();
+        kafkaProducer.send(new ProducerRecord<>(INCOMING_TOPIC_NAME, beverageOrder.orderId, jsonb.toJson(beverageOrder).toString())).get();
+//        ConsumerRecords<String, String> initialRecords = kafkaConsumer.poll(Duration.ofMillis(10000));
+//        assertEquals(1, initialRecords.count());
 
         //Give the Barista time to make the drink
         Thread.sleep(5010);
 
-        List<PartitionInfo> partitionInfos = kafkaConsumer.partitionsFor(TOPIC_NAME);
+        DescribeClusterResult describeClusterResult = kafkaAdminClient.describeCluster();
 
-        ConsumerRecords<String, String> allRecords = kafkaConsumer.poll(Duration.ofMillis(10000));
-        assertFalse(allRecords.isEmpty());
-        for (ConsumerRecord<String, String> record : allRecords) {
+        ConsumerRecords<String, String> newRecords = kafkaConsumer.poll(Duration.ofMillis(10000));
+        assertEquals(1, newRecords.count());
+        for (ConsumerRecord<String, String> record : newRecords) {
             System.out.printf("offset = %d, key = %s, value = %s\n",
                     record.offset(),
                     record.key(),
                     record.value());
-            assertEquals(beverageOrder.orderId, record.key());
-            assertEquals(beverageOrder.toString(), record.value());
+//            assertEquals(beverageOrder.orderId, record.key());
+//            assertEquals(beverageOrder.toString(), record.value());
             System.out.println(record.value());
             BeverageOrder result = jsonb.fromJson(record.value(), BeverageOrder.class);
-            assertEquals(MediaPlayer.Status.READY, result.status);
+            assertEquals(Status.READY, result.status);
         }
     }
 }

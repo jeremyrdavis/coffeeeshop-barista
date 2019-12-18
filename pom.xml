@@ -90,7 +90,11 @@
       <version>${kafka-clients.version}</version>
       <scope>test</scope>
     </dependency>
-    </dependencies>
+      <dependency>
+          <groupId>org.apache.kafka</groupId>
+          <artifactId>kafka-clients</artifactId>
+      </dependency>
+  </dependencies>
   <build>
     <plugins>
       <plugin>
