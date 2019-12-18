@@ -2,6 +2,7 @@ package com.redhat.examples.quarkus.coffeeshop.barista.domain;
 
 public class BeverageOrder {
 
+    public String orderId;
 
     public String name;
 
@@ -12,12 +13,14 @@ public class BeverageOrder {
     public BeverageOrder() {
     }
 
-    public BeverageOrder(String name, Beverage beverage) {
+    public BeverageOrder(String orderId, String name, Beverage beverage) {
+        this.orderId = orderId;
         this.name = name;
         this.beverage = beverage;
     }
 
-    public BeverageOrder(String name, Beverage beverage, Status status) {
+    public BeverageOrder(String orderId, String name, Beverage beverage, Status status) {
+        this.orderId = orderId;
         this.name = name;
         this.beverage = beverage;
         this.status = status;

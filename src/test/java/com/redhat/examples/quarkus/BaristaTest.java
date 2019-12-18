@@ -7,6 +7,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
 import javax.inject.Inject;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -23,7 +24,7 @@ public class BaristaTest {
     @Test
     public void testBlackCoffeeOrder() throws ExecutionException, InterruptedException {
 
-        BeverageOrder beverageOrder = new BeverageOrder("Jeremy", Beverage.BLACK_COFFEE);
+        BeverageOrder beverageOrder = new BeverageOrder(UUID.randomUUID().toString(),"Jeremy", Beverage.BLACK_COFFEE);
         CompletableFuture<BeverageOrder> result = barista.orderIn(beverageOrder);
         assertEquals(result.get().status, Status.READY);
     }
@@ -31,7 +32,7 @@ public class BaristaTest {
     @Test
     public void testLatteOrder() throws ExecutionException, InterruptedException {
 
-        BeverageOrder beverageOrder = new BeverageOrder("Jeremy", Beverage.LATTE);
+        BeverageOrder beverageOrder = new BeverageOrder(UUID.randomUUID().toString(),"Jeremy", Beverage.LATTE);
         CompletableFuture<BeverageOrder> result = barista.orderIn(beverageOrder);
         assertEquals(result.get().status, Status.READY);
     }

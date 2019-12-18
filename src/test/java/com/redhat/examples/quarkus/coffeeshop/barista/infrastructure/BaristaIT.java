@@ -3,7 +3,10 @@ package com.redhat.examples.quarkus.coffeeshop.barista.infrastructure;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.Beverage;
 import com.redhat.examples.quarkus.coffeeshop.barista.domain.BeverageOrder;
 import io.quarkus.test.junit.QuarkusTest;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -13,104 +16,126 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
+import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.io.File;
+import java.time.Duration;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.fail;
+import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 @Testcontainers
 public class BaristaIT {
 
-    static final String TOPIC_NAME = "orders";
-
+    final String TOPIC_NAME = "orders";
+    static DockerComposeContainer dockerComposeContainer;
     KafkaProducer<String, String> kafkaProducer;
-
     KafkaConsumer<String, String> kafkaConsumer;
+    AdminClient kafkaAdminClient;
 
-/*
-    @Container
-    GenericContainer zookeeper = new GenericContainer<>("strimzi/kafka:0.11.3-kafka-2.1.0")
-            .withEnv("LOG_DIR", "/tmp/logs")
-            .withExposedPorts(2181)
-            .withCommand("sh", "-c", "bin/zookeeper-server-start.sh config/zookeeper.properties");
-
-    @Container
-    GenericContainer kafka = new GenericContainer<>("strimzi/kafka:0.11.3-kafka-2.1.0")
-            .withEnv("LOG_DIR", "/tmp/logs")
-            .withEnv("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://localhost:9092")
-            .withEnv("KAFKA_LISTENERS", "PLAINTEXT://0.0.0.0:9092")
-            .withEnv("KAFKA_ZOOKEEPER_CONNECT", "zookeeper:2181")
-            .withExposedPorts(9092)
-            .withCommand("sh", "-c", "bin/kafka-server-start.sh config/server.properties --override listeners=$${KAFKA_LISTENERS} --override advertised.listeners=$${KAFKA_ADVERTISED_LISTENERS} --override zookeeper.connect=$${KAFKA_ZOOKEEPER_CONNECT}");
-*/
-
-    public KafkaContainer kafka = new KafkaContainer()
-            .withEnv("LOG_DIR", "/tmp/logs")
-            .withEnv("KAKFKA_ZOOKEEPER_CONNECT", "localhost:32181")
-            .withEnv("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://localhost:29092")
-            .withEnv("KAFKA_LISTENERS", "PLAINTEXT://0.0.0.0:29092")
-            .withExposedPorts(32800, 32801, 32802, 32804,32796,32798,9093)
-            .withCommand("sh", "-c", "bin/kafka-server-start.sh config/server.properties --override listeners=$${KAFKA_LISTENERS} --override advertised.listeners=$${KAFKA_ADVERTISED_LISTENERS}");
+    @BeforeAll
+    public static void setUpAll() {
+        dockerComposeContainer = new DockerComposeContainer(
+                new File("src/test/resources/docker-compose.yaml"))
+                .withExposedService("kafka", 9092)
+                .withExposedService("zookeeper", 2181);
+        dockerComposeContainer.start();
+    }
 
     @BeforeEach
     public void setUp() {
 
-        //start Kafka
-        kafka.start();
-
-        //create Producer config
-        String bootstrapServers = kafka.getBootstrapServers();
-        Map<String, String> config = new HashMap<>();
-        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        config.put(ProducerConfig.CLIENT_ID_CONFIG, UUID.randomUUID().toString());
-
-        //initialize the Producer
-        kafkaProducer = new KafkaProducer(
-                config,
-                new StringSerializer(),
-                new StringSerializer()
-        );
-
-        //create Consumer config
-        Map<String, String> consumerConfig = new HashMap<>();
-        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "tc-" + UUID.randomUUID());
-        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        //initialize the Consumer
-        kafkaConsumer = new KafkaConsumer(
-                consumerConfig,
-                new StringDeserializer(),
-                new StringDeserializer()
-        );
+        setUpAdminClient();
+        setUpProducer();
+        setUpTopics();
+        setUpConsumer();
     }
 
     @AfterEach
     public void tearDown() {
-        kafka.stop();
+    }
+
+    @AfterAll
+    public static void tearDownAll() {
+        dockerComposeContainer.stop();
+    }
+
+    void setUpAdminClient() {
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("bootstrap.servers", "localhost:9092");
+        kafkaAdminClient = AdminClient.create(config);
+    }
+
+    void setUpTopics() {
+        //create Topics
+
+        List<NewTopic> topics = new ArrayList<>();
+        topics.add(new NewTopic(TOPIC_NAME, 4, (short) 1));
+
+        kafkaAdminClient.createTopics(topics);
+        kafkaAdminClient.close();
+    }
+
+    void setUpProducer(){
+        //create Producer config
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put("input.topic.name", TOPIC_NAME);
+
+        //initialize the Producer
+        kafkaProducer = new KafkaProducer(
+                props,
+                new StringSerializer(),
+                new StringSerializer()
+        );
+    }
+
+    void setUpConsumer() {
+
+        //create Consumer config
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "testgroup" + new Random().nextInt());
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        //initialize the Consumer
+        kafkaConsumer = new KafkaConsumer(props);
+        //subscribe
+        kafkaConsumer.subscribe(singletonList(TOPIC_NAME));
     }
 
     @Test
     public void testOrderInFromKafka() throws ExecutionException, InterruptedException {
 
-        BeverageOrder beverageOrder = new BeverageOrder("Jeremy", Beverage.BLACK_COFFEE);
-        kafkaProducer.send(new ProducerRecord<>(TOPIC_NAME, "testcontainers", "rulezzz")).get();
+        BeverageOrder beverageOrder = new BeverageOrder(UUID.randomUUID().toString(), "Jeremy", Beverage.BLACK_COFFEE);
+        kafkaProducer.send(new ProducerRecord<>(TOPIC_NAME, beverageOrder.orderId, beverageOrder.toString())).get();
 
         Thread.sleep(5010);
 
-        ConsumerRecords<String, String> records = kafkaConsumer.poll(100);
+        ConsumerRecords<String, String> records = kafkaConsumer.poll(Duration.ofMillis(10000));
         assertFalse(records.isEmpty());
-        fail("unimplemented");
+        for (ConsumerRecord<String, String> record : records) {
+            System.out.printf("offset = %d, key = %s, value = %s\n",
+                    record.offset(),
+                    record.key(),
+                    record.value());
+            assertEquals(beverageOrder.orderId, record.key());
+            assertEquals(beverageOrder.toString(), record.value());
+        }
     }
 }
 

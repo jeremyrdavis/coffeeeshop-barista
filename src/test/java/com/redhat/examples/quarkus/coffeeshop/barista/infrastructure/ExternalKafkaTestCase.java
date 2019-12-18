@@ -34,7 +34,7 @@ public class ExternalKafkaTestCase {
     static AdminClient kafkaAdminClient;
 
     @BeforeEach
-    public static void setUp() {
+    public void setUp() {
 
         setUpAdminClient();
         setUpProducer();
@@ -46,7 +46,6 @@ public class ExternalKafkaTestCase {
     public void tearDown() {
     }
 
-    @Test
     public void testConsumingMessages() {
 
         ConsumerRecords<String, String> records = kafkaConsumer.poll(Duration.ofMillis(10000));
@@ -59,7 +58,6 @@ public class ExternalKafkaTestCase {
         });
     }
 
-    @Test
     public void testSendingMessages() {
 
         long numberOfEvents = 5;

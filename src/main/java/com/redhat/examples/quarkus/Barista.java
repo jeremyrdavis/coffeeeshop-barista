@@ -5,6 +5,7 @@ import com.redhat.examples.quarkus.coffeeshop.barista.domain.Status;
 import org.jboss.logging.Logger;
 
 import javax.enterprise.context.ApplicationScoped;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @ApplicationScoped
@@ -37,7 +38,7 @@ public class Barista {
     private BeverageOrder prepare(final BeverageOrder beverageOrder, int seconds) {
         try {
             Thread.sleep(seconds * 1000);
-            return new BeverageOrder(beverageOrder.name, beverageOrder.beverage, Status.READY);
+            return new BeverageOrder(beverageOrder.orderId, beverageOrder.name, beverageOrder.beverage, Status.READY);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
