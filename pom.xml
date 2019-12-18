@@ -7,6 +7,7 @@
   <version>1.0-SNAPSHOT</version>
   <properties>
     <compiler-plugin.version>3.8.1</compiler-plugin.version>
+    <kafka-clients.version>2.2.1.redhat-00002</kafka-clients.version>
     <maven.compiler.parameters>true</maven.compiler.parameters>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
@@ -17,7 +18,14 @@
     <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
     <quarkus.platform.version>1.0.1.Final</quarkus.platform.version>
     <surefire-plugin.version>2.22.1</surefire-plugin.version>
+    <testcontainers.version>1.12.3</testcontainers.version>
   </properties>
+  <repositories>
+      <repository>
+        <id>redhat-maven</id>
+        <url>https://maven.repository.redhat.com/ga/</url>
+      </repository>
+  </repositories>
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -40,17 +48,6 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.awaitility</groupId>
-      <artifactId>awaitility</artifactId>
-      <version>4.0.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-jsonb</artifactId>
     </dependency>
@@ -58,7 +55,42 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-smallrye-reactive-messaging-kafka</artifactId>
     </dependency>
-  </dependencies>
+    <!-- Testing -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <version>4.0.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>kafka</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-clients</artifactId>
+      <version>${kafka-clients.version}</version>
+      <scope>test</scope>
+    </dependency>
+    </dependencies>
   <build>
     <plugins>
       <plugin>
